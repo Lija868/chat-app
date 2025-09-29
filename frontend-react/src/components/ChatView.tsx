@@ -80,7 +80,7 @@ export default function ChatView({ chat, token }: any) {
 
       setMessages((prev) => [
         ...prev,
-        { role: "system", content: `📎 Uploaded file: ${uploaded.filename}` },
+        { role: "system", content: `📎 Uploaded file: ${uploaded.file.filename}` },
       ])
     } catch (e) {
       console.error("Upload failed:", e)
