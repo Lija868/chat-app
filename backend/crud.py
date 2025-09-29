@@ -57,3 +57,18 @@ async def get_messages(user_id: int, chat_id: int):
         return []
     query = messages.select().where(messages.c.chat_id == chat_id).order_by(messages.c.created_at.asc())
     return await database.fetch_all(query)
+
+async def rename_chat(user_id: int, chat_id: int, new_title: str):
+    # make sure the chat belongs to the user
+    c = await get_chat(user_id, chat_id)
+    if not c:
+        raise Exception("Chat not found or unauthorized")
+
+    query = chats.update().where(
+        chats.c.id == chat_id,
+        chats.c.user_id == user_id
+    ).values(title=new_title)
+
+    await database.execute(query)
+
+    return {"id": chat_id, "user_id": user_id, "title": new_title}

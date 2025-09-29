@@ -106,6 +106,10 @@ export default function App() {
           onSelect={setSelectedChat}
           onRename={renameChat}
           onDelete={deleteChat}
+            token={token}
+              refreshChats={fetchChats}
+
+
         />
 
         <div className="user-info">

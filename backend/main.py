@@ -88,3 +88,14 @@ async def post_message(chat_id: int, payload: dict, user=Depends(get_current_use
 @app.get("/chats/{chat_id}/messages")
 async def get_messages(chat_id: int, user=Depends(get_current_user)):
     return await crud.get_messages(user["id"], chat_id)
+
+class ChatUpdate(BaseModel):
+    title: str
+
+@app.put("/chats/{chat_id}")
+async def update_chat(chat_id: int, update: ChatUpdate, user=Depends(get_current_user)):
+    try:
+        chat = await crud.rename_chat(user["id"], chat_id, update.title)
+        return chat
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
