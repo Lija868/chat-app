@@ -73,6 +73,12 @@ export default function ChatView({ chat, token }: any) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask something..."
+           onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
+                send()
+              }
+            }}
         />
         <button onClick={send}>Send</button>
       </div>
