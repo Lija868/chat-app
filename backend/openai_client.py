@@ -17,7 +17,6 @@ else:
             "messages": [
                 {"role": "user", "content": prompt},
             ],
-            "max_tokens": 500
         }
 
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -25,6 +24,7 @@ else:
             if r.status_code != 200:
                 return f"OpenAI error: {r.status_code} {r.text}"
             j = r.json()
+            print("////////////////////", j)
             return j["choices"][0]["message"]["content"]
             # resp.raise_for_status()
             # data = resp.json()
