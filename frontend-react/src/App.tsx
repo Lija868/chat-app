@@ -75,6 +75,31 @@ export default function App() {
     }
   }
 
+async function uploadFile(file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+
+  try {
+    const r = await fetch(`${API}/chats/${chat.id}/upload`, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token },
+      body: formData,
+    })
+    const data = await r.json()
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: `✅ File uploaded: ${data.file.filename}` },
+    ])
+  } catch (err) {
+    console.error("Upload failed:", err)
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: "❌ File upload failed." },
+    ])
+  }
+}
+
+
   function logout() {
     localStorage.removeItem('token')
     localStorage.removeItem('email')

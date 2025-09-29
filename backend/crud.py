@@ -72,3 +72,60 @@ async def rename_chat(user_id: int, chat_id: int, new_title: str):
     await database.execute(query)
 
     return {"id": chat_id, "user_id": user_id, "title": new_title}
+
+
+
+
+
+import os
+from sqlalchemy import insert, select
+from database import database
+from models import files, chats
+from fastapi import HTTPException
+
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+async def save_file(user_id: int, chat_id: int, filename: str, contents: bytes):
+    # Ensure chat belongs to this user
+    query = select(chats).where(chats.c.id == chat_id, chats.c.user_id == user_id)
+    chat = await database.fetch_one(query)
+    if not chat:
+        raise HTTPException(status_code=403, detail="Unauthorized chat")
+
+    # Save file physically
+    file_path = os.path.join(UPLOAD_DIR, f"{chat_id}_{filename}")
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    # Insert into DB
+    query = (
+        insert(files)
+        .values(
+            chat_id=chat_id,
+            user_id=user_id,
+            filename=filename,
+            path=file_path,
+        )
+    )
+    file_id = await database.execute(query)
+
+    return {
+        "id": file_id,
+        "chat_id": chat_id,
+        "user_id": user_id,
+        "filename": filename,
+        "path": file_path,
+    }
+
+
+async def list_files(chat_id: int, user_id: int):
+    # Ensure chat belongs to this user
+    query = select(chats).where(chats.c.id == chat_id, chats.c.user_id == user_id)
+    chat = await database.fetch_one(query)
+    if not chat:
+        raise HTTPException(status_code=403, detail="Unauthorized chat")
+
+    query = select(files).where(files.c.chat_id == chat_id, files.c.user_id == user_id)
+    return await database.fetch_all(query)

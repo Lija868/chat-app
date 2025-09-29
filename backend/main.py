@@ -99,3 +99,24 @@ async def update_chat(chat_id: int, update: ChatUpdate, user=Depends(get_current
         return chat
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+
+
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+# ------------------ FILES ------------------ #
+@app.post("/chats/{chat_id}/files")
+async def upload_file(
+    chat_id: int,
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
+    contents = await file.read()
+    saved = await crud.save_file(user["id"], chat_id, file.filename, contents)
+    return {"message": "File uploaded successfully", "file": saved}
+
+
+@app.get("/chats/{chat_id}/files")
+async def get_files(chat_id: int, user=Depends(get_current_user)):
+    return await crud.list_files(chat_id, user["id"])
+

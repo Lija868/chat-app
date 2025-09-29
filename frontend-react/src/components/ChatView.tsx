@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react"
 import MessageBubble from "./MessageBubble"
 
@@ -5,6 +6,7 @@ export default function ChatView({ chat, token }: any) {
   const [messages, setMessages] = useState<any[]>([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   const API = import.meta.env.VITE_API_URL || "http://0.0.0.0:8000"
 
@@ -20,40 +22,72 @@ export default function ChatView({ chat, token }: any) {
     setMessages(j)
   }
 
- async function send() {
-  if (!input) return
+  async function send() {
+    if (!input) return
 
-  // optimistic user message
-  const userMsg = { role: "user", content: input }
-  setMessages((prev) => [...prev, userMsg])
-  setInput("")
-  setLoading(true)
+    const userMsg = { role: "user", content: input }
+    setMessages((prev) => [...prev, userMsg])
+    setInput("")
+    setLoading(true)
 
-  try {
-    const r = await fetch(`${API}/chats/${chat.id}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + token,
-      },
-      body: JSON.stringify(userMsg),
-    })
+    try {
+      const r = await fetch(`${API}/chats/${chat.id}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify(userMsg),
+      })
 
-    const data = await r.json()
-    // backend gives { message: {...}, assistant: "..." }
-    if (data.assistant) {
+      const data = await r.json()
+      if (data.assistant) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.assistant },
+        ])
+      }
+    } catch (e) {
+      console.error("Send failed:", e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function uploadFile(file: File) {
+    if (!file) return
+    setUploading(true)
+    const formData = new FormData()
+    formData.append("file", file)
+
+    try {
+      const r = await fetch(`${API}/chats/${chat.id}/files`, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + token,
+        },
+        body: formData,
+      })
+
+      if (!r.ok) {
+        const err = await r.text()
+        console.error("File upload failed:", err)
+        return
+      }
+
+      const uploaded = await r.json()
+      console.log("Uploaded file:", uploaded)
+
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: data.assistant },
+        { role: "system", content: `📎 Uploaded file: ${uploaded.filename}` },
       ])
+    } catch (e) {
+      console.error("Upload failed:", e)
+    } finally {
+      setUploading(false)
     }
-  } catch (e) {
-    console.error("Send failed:", e)
-  } finally {
-    setLoading(false)
   }
-}
-
 
   return (
     <div className="chatview">
@@ -73,14 +107,26 @@ export default function ChatView({ chat, token }: any) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask something..."
-           onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault()
-                send()
-              }
-            }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault()
+              send()
+            }
+          }}
         />
-        <button onClick={send}>Send</button>
+        <input
+          type="file"
+          onChange={(e) => {
+            if (e.target.files?.[0]) {
+              uploadFile(e.target.files[0])
+              e.target.value = ""
+            }
+          }}
+          disabled={uploading}
+        />
+        <button onClick={send} disabled={loading}>
+          {loading ? "Sending..." : "Send"}
+        </button>
       </div>
     </div>
   )

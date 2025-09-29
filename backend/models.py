@@ -26,3 +26,16 @@ messages = Table(
     Column("content", Text, nullable=False),
     Column("created_at", DateTime, server_default=func.now()),
 )
+
+
+
+files = Table(
+    "files",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("chat_id", Integer, ForeignKey("chats.id", ondelete="CASCADE")),
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE")),
+    Column("filename", String, nullable=False),
+    Column("path", String, nullable=False),
+    Column("created_at", DateTime, server_default=func.now())
+)
