@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from crud import get_user_by_id, get_user_by_email, verify_password
+from user_crud import get_user_by_id, get_user_by_email, verify_password
 
 SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME")
 ALGORITHM = "HS256"

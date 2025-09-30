@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from starlette import status
 
 import chat_crud
 from auth import get_current_user
+from schemas import ChatUpdate
 
 router = APIRouter(
     prefix="",
@@ -11,8 +12,6 @@ router = APIRouter(
 )
 
 
-class Depends:
-    pass
 
 
 @router.post("/chats")
@@ -50,8 +49,7 @@ async def post_message(chat_id: int, payload: dict, user=Depends(get_current_use
 async def get_messages(chat_id: int, user=Depends(get_current_user)):
     return await chat_crud.get_messages(user["id"], chat_id)
 
-class ChatUpdate(BaseModel):
-    title: str
+
 
 @router.put("/chats/{chat_id}")
 async def update_chat(chat_id: int, update: ChatUpdate, user=Depends(get_current_user)):

@@ -4,11 +4,9 @@ from fastapi import FastAPI
 from datetime import datetime
 import os
 
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
 
 import settings
-import user_api
+import user_api, chat_api
 from database import database, metadata
 
 from dotenv import load_dotenv
@@ -16,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def context_path(url):
-    context_path = os.environ.get("APP_CONTEXT_PATH", "")
+    context_path = os.environ.get("APP_CONTEXT_PATH", "/")
     return f"{context_path}{url}"
 
 doc_path = os.environ.get("APP_DOC_PATH", None)
@@ -32,8 +30,7 @@ app = FastAPI(
 
 app.last_checks = datetime.now()
 
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -73,9 +70,13 @@ def ping():
 
 app.include_router(
     router,
-    prefix=context_path(""),
+    prefix="",
 )
 app.include_router(
     user_api.router,
+    prefix="",
+)
+app.include_router(
+    chat_api.router,
     prefix="",
 )
