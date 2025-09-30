@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom";
 
 export default function ChatList({
   chats,
@@ -10,23 +11,38 @@ export default function ChatList({
   const [editingId, setEditingId] = useState<number | null>(null)
   const [newTitle, setNewTitle] = useState("")
   const API = import.meta.env.VITE_API_URL || "http://0.0.0.0:8000"
+  const navigate = useNavigate();
 
-  async function renameChat(chatId: number, title: string) {
-    if (!title.trim()) return
-    try {
-      await fetch(`${API}/chats/${chatId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + token,
-        },
-        body: JSON.stringify({ title }),
-      })
-      if (refreshChats) refreshChats() // reload chat list after rename
-    } catch (err) {
-      console.error("Rename failed:", err)
+async function renameChat(chatId: number, title: string) {
+  if (!title.trim()) return;
+  try {
+    const res = await fetch(`${API}/chats/${chatId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+      },
+      body: JSON.stringify({ title }),
+    });
+
+    if (res.status === 401) {
+      // Token expired → redirect to login
+      localStorage.removeItem("token");
+      navigate("/login");
+      return;
     }
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Rename failed:", text);
+      return;
+    }
+
+    if (refreshChats) refreshChats(); // reload chat list after rename
+  } catch (err) {
+    console.error("Rename failed:", err);
   }
+}
 
   function handleDoubleClick(chat: any) {
     setEditingId(chat.id)

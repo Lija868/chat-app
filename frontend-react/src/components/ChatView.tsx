@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import MessageBubble from "./MessageBubble";
+import { useNavigate } from "react-router-dom";
 
 export default function ChatView({ chat, token }: any) {
   const [messages, setMessages] = useState<any[]>([]);
@@ -8,133 +9,122 @@ export default function ChatView({ chat, token }: any) {
   const [uploading, setUploading] = useState(false);
 
   const API = import.meta.env.VITE_API_URL || "http://0.0.0.0:8000";
+  const navigate = useNavigate();
 
-  // Ref to keep track of the last assistant message index for streaming update
   const assistantIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (chat) fetchMessages();
   }, [chat]);
 
-  async function fetchMessages() {
-    const r = await fetch(`${API}/chats/${chat.id}/messages`, {
-      headers: { Authorization: "Bearer " + token },
-    });
-    const j = await r.json();
-    setMessages(j);
+  async function apiFetch(url: string, options: RequestInit = {}) {
+    const res = await fetch(url, options);
+
+    if (res.status === 401) {
+      // Token expired → redirect to login
+      localStorage.removeItem("token");
+      navigate("/login");
+      throw new Error("Unauthorized: Token expired");
+    }
+
+    return res;
   }
 
+  async function fetchMessages() {
+    try {
+      const r = await apiFetch(`${API}/chats/${chat.id}/messages`, {
+        headers: { Authorization: "Bearer " + token },
+      });
+      const j = await r.json();
+      setMessages(j);
+    } catch (e) {
+      console.error("Fetch messages failed:", e);
+    }
+  }
 
+  async function send() {
+    if (!input.trim()) return;
 
+    const userMsg = { role: "user", content: input.trim() };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
 
+    try {
+      const response = await apiFetch(`${API}/chats/${chat.id}/messages/stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify(userMsg),
+      });
 
+      if (!response.body) throw new Error("ReadableStream not supported.");
 
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let assistantMessage = "";
 
+      setMessages((prev) => {
+        assistantIndexRef.current = prev.length;
+        return [...prev, { role: "assistant", content: "" }];
+      });
 
+      let buffer = "";
 
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() || "";
 
+          for (const part of parts) {
+            const lines = part.split("\n");
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
 
+              if (trimmed.startsWith("data: ")) {
+                const dataStr = trimmed.slice("data: ".length);
 
+                if (dataStr === "[DONE]") {
+                  done = true;
+                  break;
+                }
 
+                try {
+                  const parsed = JSON.parse(dataStr);
+                  const content = parsed.content || "";
 
+                  assistantMessage += content;
 
-async function send() {
-  if (!input.trim()) return;
-
-  const userMsg = { role: "user", content: input.trim() };
-  setMessages((prev) => [...prev, userMsg]);
-  setInput("");
-  setLoading(true);
-
-  try {
-    const response = await fetch(`${API}/chats/${chat.id}/messages/stream`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + token,
-      },
-      body: JSON.stringify(userMsg),
-    });
-
-    if (!response.body) throw new Error("ReadableStream not supported.");
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let done = false;
-    let assistantMessage = "";
-
-    // Add empty assistant message, then store its index
-    setMessages((prev) => {
-      assistantIndexRef.current = prev.length;
-      return [...prev, { role: "assistant", content: "" }];
-    });
-
-    let buffer = "";
-
-    while (!done) {
-      const { value, done: doneReading } = await reader.read();
-      done = doneReading;
-      if (value) {
-        buffer += decoder.decode(value, { stream: true });
-
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() || "";
-
-        for (const part of parts) {
-          const lines = part.split("\n");
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-
-            if (trimmed.startsWith("data: ")) {
-              const dataStr = trimmed.slice("data: ".length);
-
-              if (dataStr === "[DONE]") {
-                done = true;
-                break;
-              }
-
-              try {
-                const parsed = JSON.parse(dataStr);
-                // ✅ Just get content
-                const content = parsed.content || "";
-
-                assistantMessage += content;
-
-                setMessages((prev) => {
-                  if (assistantIndexRef.current === null) return prev;
-                  const newMessages = [...prev];
-                  newMessages[assistantIndexRef.current] = {
-                    role: "assistant",
-                    content: assistantMessage,
-                  };
-                  return newMessages;
-                });
-              } catch (e) {
-                console.error("Error parsing JSON chunk:", e);
+                  setMessages((prev) => {
+                    if (assistantIndexRef.current === null) return prev;
+                    const newMessages = [...prev];
+                    newMessages[assistantIndexRef.current] = {
+                      role: "assistant",
+                      content: assistantMessage,
+                    };
+                    return newMessages;
+                  });
+                } catch (e) {
+                  console.error("Error parsing JSON chunk:", e);
+                }
               }
             }
           }
         }
       }
+    } catch (e) {
+      console.error("Send failed:", e);
+    } finally {
+      setLoading(false);
     }
-  } catch (e) {
-    console.error("Send failed:", e);
-  } finally {
-    setLoading(false);
   }
-}
-
-
-
-
-
-
-
-
-
-
-
 
   async function uploadFile(file: File) {
     if (!file) return;
@@ -143,7 +133,7 @@ async function send() {
     formData.append("file", file);
 
     try {
-      const r = await fetch(`${API}/chats/${chat.id}/files`, {
+      const r = await apiFetch(`${API}/chats/${chat.id}/files`, {
         method: "POST",
         headers: {
           Authorization: "Bearer " + token,
