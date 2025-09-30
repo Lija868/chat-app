@@ -30,22 +30,27 @@ body{margin:0;font-family:Inter,ui-sans-serif,system-ui,Arial;background:var(--b
   padding: 16px;
   box-shadow: 2px 0 6px rgba(0,0,0,0.04);
   position: relative; /* make absolute children like .user-info work */
+    height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Sidebar footer */
 .user-info {
-  position: absolute;
-  bottom: 20px;
-  left: 16px;
-  right: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  position: fixed; /* Fix it to viewport */
+  bottom: 20px;    /* 20px from bottom */
+  left: 20px;      /* 20px from left */
+  width: 220px;    /* Or whatever width fits your sidebar */
   background: #f5f7fa;
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 14px;
   color: var(--fg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  z-index: 1000; /* stay on top */
 }
 
 .user-email {
