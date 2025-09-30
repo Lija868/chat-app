@@ -1,64 +1,146 @@
-
-import { useEffect, useState } from "react"
-import MessageBubble from "./MessageBubble"
+import { useEffect, useState, useRef } from "react";
+import MessageBubble from "./MessageBubble";
 
 export default function ChatView({ chat, token }: any) {
-  const [messages, setMessages] = useState<any[]>([])
-  const [input, setInput] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [messages, setMessages] = useState<any[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-  const API = import.meta.env.VITE_API_URL || "http://0.0.0.0:8000"
+  const API = import.meta.env.VITE_API_URL || "http://0.0.0.0:8000";
+
+  // Ref to keep track of the last assistant message index for streaming update
+  const assistantIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (chat) fetchMessages()
-  }, [chat])
+    if (chat) fetchMessages();
+  }, [chat]);
 
   async function fetchMessages() {
     const r = await fetch(`${API}/chats/${chat.id}/messages`, {
       headers: { Authorization: "Bearer " + token },
-    })
-    const j = await r.json()
-    setMessages(j)
+    });
+    const j = await r.json();
+    setMessages(j);
   }
 
-  async function send() {
-    if (!input) return
 
-    const userMsg = { role: "user", content: input }
-    setMessages((prev) => [...prev, userMsg])
-    setInput("")
-    setLoading(true)
 
-    try {
-      const r = await fetch(`${API}/chats/${chat.id}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + token,
-        },
-        body: JSON.stringify(userMsg),
-      })
 
-      const data = await r.json()
-      if (data.assistant) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.assistant },
-        ])
+
+
+
+
+
+
+
+
+
+
+
+async function send() {
+  if (!input.trim()) return;
+
+  const userMsg = { role: "user", content: input.trim() };
+  setMessages((prev) => [...prev, userMsg]);
+  setInput("");
+  setLoading(true);
+
+  try {
+    const response = await fetch(`${API}/chats/${chat.id}/messages/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+      },
+      body: JSON.stringify(userMsg),
+    });
+
+    if (!response.body) throw new Error("ReadableStream not supported.");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let done = false;
+    let assistantMessage = "";
+
+    // Add empty assistant message, then store its index
+    setMessages((prev) => {
+      assistantIndexRef.current = prev.length;
+      return [...prev, { role: "assistant", content: "" }];
+    });
+
+    let buffer = "";
+
+    while (!done) {
+      const { value, done: doneReading } = await reader.read();
+      done = doneReading;
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+
+        for (const part of parts) {
+          const lines = part.split("\n");
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+
+            if (trimmed.startsWith("data: ")) {
+              const dataStr = trimmed.slice("data: ".length);
+
+              if (dataStr === "[DONE]") {
+                done = true;
+                break;
+              }
+
+              try {
+                const parsed = JSON.parse(dataStr);
+                // ✅ Just get content
+                const content = parsed.content || "";
+
+                assistantMessage += content;
+
+                setMessages((prev) => {
+                  if (assistantIndexRef.current === null) return prev;
+                  const newMessages = [...prev];
+                  newMessages[assistantIndexRef.current] = {
+                    role: "assistant",
+                    content: assistantMessage,
+                  };
+                  return newMessages;
+                });
+              } catch (e) {
+                console.error("Error parsing JSON chunk:", e);
+              }
+            }
+          }
+        }
       }
-    } catch (e) {
-      console.error("Send failed:", e)
-    } finally {
-      setLoading(false)
     }
+  } catch (e) {
+    console.error("Send failed:", e);
+  } finally {
+    setLoading(false);
   }
+}
+
+
+
+
+
+
+
+
+
+
+
 
   async function uploadFile(file: File) {
-    if (!file) return
-    setUploading(true)
-    const formData = new FormData()
-    formData.append("file", file)
+    if (!file) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
 
     try {
       const r = await fetch(`${API}/chats/${chat.id}/files`, {
@@ -67,25 +149,25 @@ export default function ChatView({ chat, token }: any) {
           Authorization: "Bearer " + token,
         },
         body: formData,
-      })
+      });
 
       if (!r.ok) {
-        const err = await r.text()
-        console.error("File upload failed:", err)
-        return
+        const err = await r.text();
+        console.error("File upload failed:", err);
+        return;
       }
 
-      const uploaded = await r.json()
-      console.log("Uploaded file:", uploaded)
+      const uploaded = await r.json();
+      console.log("Uploaded file:", uploaded);
 
       setMessages((prev) => [
         ...prev,
         { role: "system", content: `📎 Uploaded file: ${uploaded.file.filename}` },
-      ])
+      ]);
     } catch (e) {
-      console.error("Upload failed:", e)
+      console.error("Upload failed:", e);
     } finally {
-      setUploading(false)
+      setUploading(false);
     }
   }
 
@@ -109,25 +191,26 @@ export default function ChatView({ chat, token }: any) {
           placeholder="Ask something..."
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault()
-              send()
+              e.preventDefault();
+              send();
             }
           }}
+          disabled={loading || uploading}
         />
         <input
           type="file"
           onChange={(e) => {
             if (e.target.files?.[0]) {
-              uploadFile(e.target.files[0])
-              e.target.value = ""
+              uploadFile(e.target.files[0]);
+              e.target.value = "";
             }
           }}
-          disabled={uploading}
+          disabled={uploading || loading}
         />
-        <button onClick={send} disabled={loading}>
+        <button onClick={send} disabled={loading || uploading}>
           {loading ? "Sending..." : "Send"}
         </button>
       </div>
     </div>
-  )
+  );
 }
